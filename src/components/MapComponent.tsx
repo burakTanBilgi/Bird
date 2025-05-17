@@ -4,7 +4,6 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import styles from '../styles/MapComponent.module.css';
 
-// Set your Mapbox token here
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
 
 interface MapComponentProps {
@@ -27,7 +26,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [zoom, setZoom] = useState<number>(initialZoom);
 
   useEffect(() => {
-    // Initialize map only once and if the container is available
     if (map.current || !mapContainer.current) return;
 
     map.current = new mapboxgl.Map({
@@ -39,10 +37,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
       projection: 'globe'
     });
 
-    // Add navigation controls
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Update state when map moves
     map.current.on('move', () => {
       if (!map.current) return;
       setLng(parseFloat(map.current.getCenter().lng.toFixed(4)));
@@ -50,38 +46,33 @@ const MapComponent: React.FC<MapComponentProps> = ({
       setZoom(parseFloat(map.current.getZoom().toFixed(2)));
     });
 
-    // Add 3D buildings once the map style has loaded
     map.current.on('style.load', () => {
       if (!map.current || !show3DBuildings) return;
 
-      // 3D binaları eklemek için katman kontrolü
       const layers = map.current.getStyle().layers;
       if (!layers) return;
 
-      // İlk sembol katmanını bul (etiketler ve şehir adları gibi semboller)
       const labelLayerId = layers.find(
         (layer) => layer.type === 'symbol' && layer.layout && (layer.layout as any)['text-field']
       )?.id;
 
-      // 3d dünya için
       map.current.setFog({
-        color: 'rgb(186, 210, 235)', // atmosfer rengi
-        'high-color': 'rgb(36, 92, 223)', // üst atmosfer rengi
-        'horizon-blend': 0.02, // ufuk çizgisi karışım oranı
-        'space-color': 'rgb(11, 11, 25)', // uzay rengi
-        'star-intensity': 0.6 // yıldız yoğunluğu
+        color: 'rgb(186, 210, 235)',
+        'high-color': 'rgb(36, 92, 223)',
+        'horizon-blend': 0.02,
+        'space-color': 'rgb(11, 11, 25)',
+        'star-intensity': 0.6
       });
 
-      // 3D bina katmanını ekle
       map.current.addLayer(
         {
-          'id': '3d-buildings',
-          'source': 'composite',
+          id: '3d-buildings',
+          source: 'composite',
           'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'],
-          'type': 'fill-extrusion',
-          'minzoom': 15, // 15 zoom seviyesinden sonra görünür olacak
-          'paint': {
+          filter: ['==', 'extrude', 'true'],
+          type: 'fill-extrusion',
+          minzoom: 15,
+          paint: {
             'fill-extrusion-color': [
               'interpolate',
               ['linear'],
@@ -112,7 +103,70 @@ const MapComponent: React.FC<MapComponentProps> = ({
         labelLayerId
       );
 
-      // İsteğe bağlı: Işık efektlerini artırmak için
+      map.current.addLayer({
+        id: 'selected-building-light',
+        type: 'fill-extrusion',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['==', ['id'], ''], // boş başlangıç
+        paint: {
+          'fill-extrusion-color': '#120A8F',
+          'fill-extrusion-height': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            15, 0,
+            15.05, ['+', ['get', 'height'], 500000]  // Çok yüksek ışık konisi gibi
+          ],
+          'fill-extrusion-base': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            15, ['get', 'height'],
+            15.05, ['get', 'height']
+          ],
+          'fill-extrusion-opacity': 0.35
+        }
+      });
+      
+      
+
+      map.current.on('click', (e) => {
+        if (!map.current) return;
+
+        const features = map.current.queryRenderedFeatures(e.point, {
+          layers: ['3d-buildings']
+        });
+
+        if (!features || !features.length) return;
+
+        const clickedFeature = features[0];
+        const featureId = clickedFeature.id;
+        if (!featureId) return;
+
+        // Eğer seçili bina katmanı yoksa eklemeyi deneyelim
+        const style = map.current.getStyle();
+        if (!style.layers.find(layer => layer.id === 'selected-building')) {
+          map.current.addLayer({
+            id: 'selected-building',
+            type: 'fill-extrusion',
+            source: 'composite',
+            'source-layer': 'building',
+            filter: ['==', ['id'], featureId], // seçili bina
+            paint: {
+              'fill-extrusion-color': '#120A8F',
+              'fill-extrusion-height': ['get', 'height'],
+              'fill-extrusion-base': ['get', 'min_height'],
+              'fill-extrusion-opacity': 0.6
+            }
+          });
+        } else {
+          map.current.setFilter('selected-building', ['==', ['id'], featureId]);
+        }
+
+        map.current.setFilter('selected-building-light', ['==', ['id'], featureId]);
+      });
+
       map.current.setLight({
         anchor: 'viewport',
         color: '#ffffff',
@@ -121,8 +175,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
       });
     });
 
-
-    // Clean up on unmount
     return () => {
       if (map.current) {
         map.current.remove();

@@ -10,7 +10,7 @@ const Profile: NextPage = () => {
       <Head>
         <title>Next.js App - Profile</title>
         <meta name="description" content="User profile page" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.png" />
       </Head>
 
       <Navbar />

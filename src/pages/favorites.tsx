@@ -127,7 +127,7 @@ const Favorites: NextPage = () => {
       <Head>
         <title>Next.js Map App - Favorites</title>
         <meta name="description" content="Your favorite map locations" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.png" />
       </Head>
 
       <Navbar />

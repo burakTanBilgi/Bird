@@ -23,7 +23,7 @@
 }
 
 .logo span:hover {
-  color: #98C1D9;
+  color: #7A9CC6;
 }
 
 .links {
@@ -44,13 +44,14 @@
 
 .links span:hover {
   font-size: 1.1rem;
-  color: #98C1D9;
-  background-color: rgba(152, 193, 217, 0.1);
+  color: #7A9CC6;
+  background-color: #2A2D34;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
 
 .active {
-  color: #98C1D9 !important;
+  color: #7A9CC6 !important;
   font-weight: bold;
 }
 

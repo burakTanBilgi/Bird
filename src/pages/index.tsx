@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import BottomTab from '../components/BottomTab';
 import Navbar from '../components/Navbar';
 import styles from '../styles/Home.module.css';
-import BottomTab from '../components/BottomTab';
 
 // Import the MapComponent dynamically with no SSR to avoid mapbox-gl issues
 const MapComponent = dynamic(() => import('../components/MapComponent'), {

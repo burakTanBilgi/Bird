@@ -15,9 +15,9 @@ interface MapComponentProps {
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({
-  initialLng = 32.8331251,
-  initialLat = 39.8481487,
-  initialZoom = 11,
+  initialLng = 32.8552,
+  initialLat = 39.8472,
+  initialZoom = 15,
   show3DBuildings = true
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);

@@ -116,7 +116,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             ['linear'],
             ['zoom'],
             15, 0,
-            15.05, ['+', ['get', 'height'], 500]  // Çok yüksek ışık konisi gibi
+            15.05, ['+', ['get', 'height'], 500000]  // Çok yüksek ışık konisi gibi
           ],
           'fill-extrusion-base': [
             'interpolate',
@@ -125,7 +125,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             15, ['get', 'height'],
             15.05, ['get', 'height']
           ],
-          'fill-extrusion-opacity': 0.15
+          'fill-extrusion-opacity': 0.35
         }
       });
       

@@ -35,8 +35,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
       style: 'mapbox://styles/mapbox/streets-v11',
       center: [lng, lat],
       zoom: zoom,
-      pitch: 45,
-      antialias: true
+      antialias: true,
+      projection: 'globe'
     });
 
     // Add navigation controls
@@ -62,6 +62,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
       const labelLayerId = layers.find(
         (layer) => layer.type === 'symbol' && layer.layout && (layer.layout as any)['text-field']
       )?.id;
+
+      // 3d dünya için
+      map.current.setFog({
+        color: 'rgb(186, 210, 235)', // atmosfer rengi
+        'high-color': 'rgb(36, 92, 223)', // üst atmosfer rengi
+        'horizon-blend': 0.02, // ufuk çizgisi karışım oranı
+        'space-color': 'rgb(11, 11, 25)', // uzay rengi
+        'star-intensity': 0.6 // yıldız yoğunluğu
+      });
 
       // 3D bina katmanını ekle
       map.current.addLayer(

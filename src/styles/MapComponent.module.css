@@ -1,8 +1,8 @@
 .mapContainer {
   position: relative;
   width: 100%;
-  height: calc(100vh - 150px); /* Taller height that takes up most of viewport */
-  border-radius: 10px;
+  height: calc(100vh - 60px); 
+  border-radius: 0; 
   overflow: hidden;
 }
 

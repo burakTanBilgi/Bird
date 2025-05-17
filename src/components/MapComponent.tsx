@@ -35,7 +35,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       style: 'mapbox://styles/mapbox/streets-v11',
       center: [lng, lat],
       zoom: zoom,
-      bearing: -17.6,
+      pitch: 45,
       antialias: true
     });
 

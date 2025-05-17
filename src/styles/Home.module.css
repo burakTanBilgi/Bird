@@ -8,12 +8,14 @@
 }
 
 .main {
-  padding: 2rem;
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
+  padding: 0; 
+  width: 100%;
+  max-width: 100%; 
 }
 
 .footer {
@@ -42,8 +44,9 @@
 
 .mapWrapper {
   width: 100%;
-  max-width: 1000px;
-  margin: 2rem 0;
+  height: 100%; 
+  max-width: 100%; 
+  margin: 0; 
 }
 
 .grid {

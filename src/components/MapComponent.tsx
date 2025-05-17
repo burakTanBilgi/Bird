@@ -112,6 +112,37 @@ const MapComponent: React.FC<MapComponentProps> = ({
         labelLayerId
       );
 
+      map.current.addLayer({
+        id: 'selected-building',
+        type: 'fill-extrusion',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['==', 'fid', ''], // Başta hiçbir şey seçili değil
+        paint: {
+          'fill-extrusion-color': '#00008B', // Lacivert
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 0.95
+        }
+      });
+
+      map.current.on('click', (e) => {
+        const features = map.current?.queryRenderedFeatures(e.point, {
+          layers: ['3d-buildings']
+        });
+      
+        if (!features || !features.length) return;
+      
+        const clickedFeature = features[0];
+        const featureId = clickedFeature.id;
+      
+        if (!featureId) return;
+      
+        // 🔵 SADECE tıklanan binayı mavi boya
+        map.current?.setFilter('selected-building', ['==', ['id'], featureId]);
+      });
+      
+
       // İsteğe bağlı: Işık efektlerini artırmak için
       map.current.setLight({
         anchor: 'viewport',

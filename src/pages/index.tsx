@@ -4,6 +4,7 @@ import { NextPage } from 'next';
 import dynamic from 'next/dynamic';
 import Navbar from '../components/Navbar';
 import styles from '../styles/Home.module.css';
+import BottomTab from '../components/BottomTab';
 
 // Import the MapComponent dynamically with no SSR to avoid mapbox-gl issues
 const MapComponent = dynamic(() => import('../components/MapComponent'), {
@@ -27,6 +28,10 @@ const Home: NextPage = () => {
           <MapComponent />
         </div>
       </main>
+
+      {/* Bottom Tab Component */}
+      <BottomTab />
+
     </div>
   );
 };

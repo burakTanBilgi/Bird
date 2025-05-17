@@ -1,4 +1,4 @@
-// components/Navbar.tsx - Navigation Component (unchanged)
+// components/Navbar.tsx - Navigation Component
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styles from '../styles/Navbar.module.css';
@@ -11,16 +11,16 @@ const Navbar: FC = () => {
     <nav className={styles.navbar}>
       <div className={styles.logo}>
         <Link href="/">
-          <span>Kuşbakış</span>
+          <span> Kuşbakış 𓅪 </span>
         </Link>
       </div>
       
       <div className={styles.links}>
-        <Link href="/">
-          <span className={router.pathname === '/' ? styles.active : ''}>Home</span>
-        </Link>
         <Link href="/profile">
-          <span className={router.pathname === '/profile' ? styles.active : ''}>Profile</span>
+          <span className={router.pathname === '/profile' ? styles.active : ''}>Profil</span>
+        </Link>
+        <Link href="/favorites">
+          <span className={router.pathname === '/favorites' ? styles.active : ''}>Favoriler</span>
         </Link>
       </div>
     </nav>

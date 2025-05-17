@@ -1,14 +1,14 @@
 // pages/index.tsx - Updated Home Page with Map
 import Head from 'next/head';
 import { NextPage } from 'next';
-import dynamic from 'next/dynamic';
+// import dynamic from 'next/dynamic';
 import Navbar from '../components/Navbar';
 import styles from '../styles/Home.module.css';
 
 // Import the MapComponent dynamically with no SSR to avoid mapbox-gl issues
-const MapComponent = dynamic(() => import('../components/MapComponent'), {
-  ssr: false
-});
+// const MapComponent = dynamic(() => import('../components/MapComponent'), {
+//   ssr: false
+// });
 
 const Home: NextPage = () => {
   return (
@@ -24,7 +24,7 @@ const Home: NextPage = () => {
       <main className={styles.main}>
         {/* Map Component */}
         <div className={styles.mapWrapper}>
-          <MapComponent />
+          {/* <MapComponent /> */}
         </div>
       </main>
     </div>

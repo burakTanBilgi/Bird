@@ -14,7 +14,7 @@
 .tabHandle {
   width: 100%;
   height: 40px;
-  background-color: #7A9CC6;
+  background-color: #1B1D22; /* Updated background color */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -23,14 +23,14 @@
   border-top-right-radius: 10px;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
   position: relative;
-  border-top: 2px solid #2A2D34;
+  border-top: 2px solid #2A2D34; /* Updated border color */
 }
 
 .tabHandle::before {
   content: "";
   width: 50px;
   height: 5px;
-  background-color: #2A2D34;
+  background-color: #2A2D34; /* Updated line color */
   border-radius: 10px;
   position: absolute;
   top: 50%;
@@ -39,7 +39,7 @@
 
 .tabContent {
   width: 100%;
-  background-color: #7A9CC6;
+  background-color: #1B1D22; /* Updated background color */
   height: 0;
   transition: height 0.3s ease;
   overflow: hidden;
@@ -49,21 +49,211 @@
   box-sizing: border-box;
 }
 
-.tabContent h3, 
-.tabContent p, 
-.tabContent span {
-  color: #FAF0CA;
-  text-shadow: 1px 1px 2px rgba(42, 45, 52, 0.7);
-  font-weight: 500;
+.propertiesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 30px;
+  max-width: 1200px;
+  margin: 20px auto;
+  padding-bottom: 20px;
 }
 
-.tabContent h3 {
+.propertyCard {
+  display: flex;
+  flex-direction: column;
+  background-color: #2A2D34;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+  height: 500px; /* Fixed height for consistent cards */
+}
+
+.propertyCard:hover {
+  transform: translateY(-3px);
+}
+
+/* Top 1/3 - Image Section */
+.propertyImageSection {
+  position: relative;
+  height: 33.33%;
+  display: flex;
+  align-items: center;
+  background-color: #1B1D22;
+}
+
+.propertyImageContainer {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.propertyImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagePagination {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+}
+
+.imageNavButton {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1rem;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.imageNavButton:hover {
+  opacity: 1;
+}
+
+.prevButton {
+  left: 10px;
+}
+
+.nextButton {
+  right: 10px;
+}
+
+/* Middle 1/3 - Content Section */
+.propertyContent {
+  flex: 1;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  height: 33.33%;
+}
+
+.propertyTitle {
+  margin: 0 0 8px 0;
+  color: #FAF0CA;
+  font-size: 1.1rem;
   font-weight: 600;
-  text-shadow: 1px 1px 2px rgba(42, 45, 52, 0.8);
+}
+
+.propertyPrice {
+  font-weight: bold;
+  color: #7A9CC6;
+  margin: 0 0 10px 0;
+  font-size: 1.2rem;
+}
+
+.propertyDescription {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #E0E0E0;
+  line-height: 1.5;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Bottom 1/3 - Actions Section */
+.propertyActions {
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid rgba(250, 240, 202, 0.1);
+  height: 33.33%;
+  box-sizing: border-box;
+}
+
+.infoButton {
+  flex: 3;
+  background-color: #7A9CC6;
+  color: #1B1D22;
+  border: none;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.infoButton:hover {
+  background-color: #98C1D9;
+}
+
+.favoriteIconButton {
+  flex: 1;
+  background-color: transparent;
+  border: 2px solid #7A9CC6;
+  color: #7A9CC6;
+  border-radius: 6px;
+  font-size: 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  height: 46px; /* Match height with infoButton */
+  transition: all 0.2s ease;
+}
+
+.favoriteIconButton:hover {
+  background-color: rgba(122, 156, 198, 0.1);
+}
+
+.favoriteActive {
+  background-color: #7A9CC6;
+  color: #1B1D22;
+}
+
+.favoriteActive:hover {
+  background-color: #6389b3;
 }
 
 .bottomTabContainer:hover .tabContent {
-  height: 50vh; /* Opens to half the viewport height */
+  height: 70vh;
   padding-top: 20px;
   padding-bottom: 20px;
+  overflow-y: auto;
+}
+
+/* Scrollbar styling */
+.tabContent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tabContent::-webkit-scrollbar-track {
+  background: #1B1D22;
+}
+
+.tabContent::-webkit-scrollbar-thumb {
+  background-color: #2A2D34;
+  border-radius: 4px;
+}
+
+.tabContent::-webkit-scrollbar-thumb:hover {
+  background-color: #3A3D44;
+}
+
+/* For smaller screens - make grid single column */
+@media (max-width: 768px) {
+  .propertiesGrid {
+    grid-template-columns: 1fr;
+  }
 }

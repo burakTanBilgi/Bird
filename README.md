@@ -1,40 +1,197 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# Kuşbakış (Bird's Eye View) 🗺️
 
-## Getting Started
+A Next.js application with Mapbox integration that allows users to explore maps, save favorite locations, and manage their profile.
 
-First, run the development server:
+## 📋 Project Overview
+
+Kuşbakış (Turkish for "Bird's Eye View") is a web application that displays interactive maps using the Mapbox GL JS library. The application includes the following features:
+
+- **Interactive Map**: Explore locations with an interactive map that displays coordinates and zoom level
+- **Favorites Management**: Save and organize your favorite locations by category
+- **User Profile**: View and manage your user information
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js (v16+)
+- npm or yarn package manager
+- A Mapbox access token (free tier available at [mapbox.com](https://www.mapbox.com))
+
+### Installation
+
+1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd bird/frontend
+```
+
+2. Install dependencies
+
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Set up environment variables
+
+Create a `.env.local` file in the frontend directory and add your Mapbox access token:
+
+```
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
+```
+
+4. Start the development server
 
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+## 🗂️ Project Structure
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+```
+frontend/
+├── public/            # Static assets
+├── src/
+│   ├── components/    # React components
+│   │   ├── MapComponent.tsx  # Mapbox integration
+│   │   └── Navbar.tsx        # Navigation bar
+│   ├── pages/         # Next.js pages
+│   │   ├── api/       # API routes
+│   │   ├── _app.tsx   # App component
+│   │   ├── _document.tsx # Document component
+│   │   ├── favorites.tsx # Favorites page
+│   │   ├── index.tsx     # Home page with map
+│   │   └── profile.tsx   # User profile page
+│   └── styles/        # CSS modules for styling
+│       ├── Favorites.module.css  # Favorites page styles
+│       ├── Home.module.css       # Main styles
+│       ├── MapComponent.module.css # Map styles
+│       └── Navbar.module.css      # Navigation styles
+├── .env.local         # Environment variables (create this file)
+├── next.config.js     # Next.js configuration
+├── package.json       # Project dependencies
+└── tsconfig.json      # TypeScript configuration
+```
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+## 🧩 Key Components
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### MapComponent
 
-## Learn More
+The `MapComponent` integrates with Mapbox GL JS to display an interactive map. It supports:
 
-To learn more about Next.js, take a look at the following resources:
+- Dynamic rendering with custom coordinates and zoom level
+- Navigation controls for zoom and pan
+- Real-time coordinate and zoom level display
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+The component is dynamically imported to avoid server-side rendering issues with Mapbox GL JS.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Navbar
 
-## Deploy on Vercel
+The `Navbar` component provides navigation between different pages of the application:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Home (Map view)
+- Favorites (Saved locations)
+- Profile (User information)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+## 🎨 Styling
+
+The application uses CSS Modules for styling. Key style files include:
+
+### Home.module.css
+
+Contains base layout styles for the entire application, including:
+
+- Container layouts
+- Main content area
+- Footer styling
+- Profile page components
+- Map wrapper styles
+
+### MapComponent.module.css
+
+Specific styles for the map component:
+
+- Map container dimensions (uses viewport-relative sizing with `calc(100vh - 150px)`)
+- Map element positioning
+- Sidebar for displaying coordinates
+
+### Favorites.module.css
+
+Styles for the favorites page including:
+
+- Favorite location cards
+- Category filtering
+- Action buttons (visited/remove)
+
+### Navbar.module.css
+
+Styling for the navigation bar including:
+
+- Logo
+- Navigation links
+- Active state indicators
+
+## ⚙️ Configuration
+
+### Mapbox Configuration
+
+The application uses Mapbox GL JS for map rendering. You must provide a Mapbox access token in the `.env.local` file:
+
+```
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
+```
+
+Without this token, the map will not render properly.
+
+### Next.js Configuration
+
+The application uses Next.js with TurboRepo for improved development experience:
+
+```bash
+npm run dev  # Starts the development server with TurboRepo
+npm run build  # Creates a production build
+npm run start  # Starts the production server
+npm run lint  # Runs ESLint for code quality
+```
+
+## 📝 Development Notes
+
+### Adding New Locations to Favorites
+
+Currently, the Favorites page displays a hard-coded list of locations. To implement adding new locations from the map to favorites, you would need to:
+
+1. Create a new state management solution (Context API or Redux)
+2. Add UI elements to the MapComponent for saving locations
+3. Connect the saved locations with the Favorites page
+
+### Map Customization
+
+You can customize the map appearance by changing the style URL in the MapComponent:
+
+```typescript
+style: 'mapbox://styles/mapbox/streets-v11',
+```
+
+Mapbox offers several predefined styles including:
+- `mapbox://styles/mapbox/streets-v11`
+- `mapbox://styles/mapbox/outdoors-v11`
+- `mapbox://styles/mapbox/light-v10`
+- `mapbox://styles/mapbox/dark-v10`
+- `mapbox://styles/mapbox/satellite-v9`
+
+## 🔗 Learn More
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Mapbox GL JS Documentation](https://docs.mapbox.com/mapbox-gl-js/)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)
+
+## 📄 License
+
+This project is licensed under the MIT License.

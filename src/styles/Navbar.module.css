@@ -3,19 +3,27 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem 2rem;
-  background-color: #fff;
+  background-color: #FAF0CA;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   width: 100%;
+  border-bottom: 2px solid #2A2D34; /* Added bottom line */
+  font-family: 'Poppins', sans-serif; /* Modern, clean font */
 }
 
 .logo {
   font-size: 1.5rem;
   font-weight: bold;
+  font-family: 'Montserrat', sans-serif; /* Bolder font for logo */
 }
 
 .logo span {
   cursor: pointer;
-  color: #0070f3;
+  color: #2A2D34;
+  transition: color 0.3s ease;
+}
+
+.logo span:hover {
+  color: #98C1D9;
 }
 
 .links {
@@ -26,10 +34,39 @@
   margin-left: 1.5rem;
   cursor: pointer;
   font-size: 1rem;
-  color: #666;
+  color: #2A2D34;
+  position: relative;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  font-family: 'Poppins', sans-serif;
+}
+
+.links span:hover {
+  font-size: 1.1rem;
+  color: #98C1D9;
+  background-color: rgba(152, 193, 217, 0.1);
+  transform: translateY(-2px);
 }
 
 .active {
-  color: #0070f3 !important;
+  color: #98C1D9 !important;
   font-weight: bold;
+}
+
+/* Adding animation when links are hovered */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.links span:hover {
+  animation: pulse 1.5s infinite;
 }

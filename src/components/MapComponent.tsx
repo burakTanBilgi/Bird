@@ -26,13 +26,15 @@ interface MapComponentProps {
   initialLat?: number;
   initialZoom?: number;
   show3DBuildings?: boolean;
+  onBuildingPropertiesChange?: (properties: Property[], buildingCoordinates?: [number, number] | null) => void;
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({
   initialLng = 32.8552,
   initialLat = 39.8472,
   initialZoom = 15,
-  show3DBuildings = true
+  show3DBuildings = true,
+  onBuildingPropertiesChange
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -42,10 +44,83 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedBuildingCoords, setSelectedBuildingCoords] = useState<[number, number] | null>(null);
+  const [selectedBuildingProperties, setSelectedBuildingProperties] = useState<Property[]>([]);
+
+  // Helper function to check if a point is inside a polygon
+  const isPointInPolygon = (point: [number, number], polygon: [number, number][]): boolean => {
+    const [x, y] = point;
+    let inside = false;
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i];
+      const [xj, yj] = polygon[j];
+      
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    
+    return inside;
+  };
+
+  // Smart property finder - used for both popup and bottom tab
+  const findPropertiesForBuilding = (buildingFeature: any, buildingCoordinates: [number, number]): Property[] => {
+    if (properties.length === 0) return [];
+    
+    let foundProperties: Property[] = [];
+    
+    // Method 1: Find properties within building polygon if available
+    if (buildingFeature.geometry && buildingFeature.geometry.type === 'Polygon') {
+      const polygon = buildingFeature.geometry.coordinates[0];
+      
+      foundProperties = properties.filter(prop => {
+        const point: [number, number] = [prop.longitude, prop.latitude];
+        return isPointInPolygon(point, polygon);
+      });
+      
+      console.log(`Found ${foundProperties.length} properties inside building polygon`);
+    }
+    
+    // Method 2: If no properties found in polygon, use distance-based approach
+    if (foundProperties.length === 0) {
+      console.log('No properties in polygon, trying distance-based approach...');
+      
+      foundProperties = properties.filter(prop => {
+        const distance = Math.sqrt(
+          Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
+          Math.pow(prop.latitude - buildingCoordinates[1], 2)
+        );
+        return distance < 0.005; // 500 meter radius
+      });
+      
+      console.log(`Found ${foundProperties.length} properties within distance`);
+    }
+    
+    // Method 3: If still no properties, find closest ones
+    if (foundProperties.length === 0) {
+      console.log('No properties in range, finding closest 3 properties...');
+      
+      const sortedProperties = properties
+        .map(prop => ({
+          property: prop,
+          distance: Math.sqrt(
+            Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
+            Math.pow(prop.latitude - buildingCoordinates[1], 2)
+          )
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 3);
+        
+      foundProperties = sortedProperties.map(item => item.property);
+      console.log(`Selected closest 3 properties`);
+    }
+    
+    return foundProperties;
+  };
 
   // Fetch properties from API based on current viewport
   const fetchProperties = async () => {
-    if (!map.current) return;
+    if (!map.current || loading) return; // Prevent multiple simultaneous requests
     
     setLoading(true);
     try {
@@ -77,7 +152,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
       
       const data = await response.json();
       console.log('Properties fetched successfully:', data.length, 'items');
-      setProperties(data);
+      
+      // Only update if data is different
+      if (JSON.stringify(data) !== JSON.stringify(properties)) {
+        setProperties(data);
+      }
     } catch (error) {
       console.error('Error fetching properties:', error);
     } finally {
@@ -152,35 +231,25 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const colorPropertyBuildings = () => {
     if (!map.current || properties.length === 0) return;
 
+    // Make sure the 3d-buildings layer is loaded
+    if (!map.current.getLayer('3d-buildings')) {
+      console.log('3d-buildings layer not yet loaded, waiting...');
+      return;
+    }
+
     const buildingIds = findBuildingsAtProperties();
 
     if (buildingIds.length === 0) {
       console.log('No buildings found at property coordinates');
+      // Clear the filter to show no buildings
+      if (map.current.getLayer('property-buildings')) {
+        map.current.setFilter('property-buildings', ['in', ['id'], ['literal', []]]);
+      }
       return;
     }
 
-    // Add or update property buildings layer
-    if (!map.current.getLayer('property-buildings')) {
-      // Add property buildings layer before the selected building layers
-      const labelLayerId = map.current.getStyle().layers?.find(
-        (layer) => layer.type === 'symbol' && layer.layout && (layer.layout as any)['text-field']
-      )?.id;
-
-      map.current.addLayer({
-        id: 'property-buildings',
-        type: 'fill-extrusion',
-        source: 'composite',
-        'source-layer': 'building',
-        filter: ['in', ['id'], ['literal', buildingIds]],
-        paint: {
-          'fill-extrusion-color': '#1e90ff', // Blue color for buildings with properties
-          'fill-extrusion-height': ['get', 'height'],
-          'fill-extrusion-base': ['get', 'min_height'],
-          'fill-extrusion-opacity': 1.0 // Fully opaque
-        }
-      }, 'selected-building-light'); // Add before the light layer
-    } else {
-      // Update filter for existing layer
+    // Update filter for property buildings layer (it already exists now)
+    if (map.current.getLayer('property-buildings')) {
       map.current.setFilter('property-buildings', ['in', ['id'], ['literal', buildingIds]]);
     }
 
@@ -233,18 +302,62 @@ const MapComponent: React.FC<MapComponentProps> = ({
       });
     }
 
-    // Add click events for property buildings
-    map.current.off('click', 'property-buildings' as any);
-    map.current.off('click', 'property-click-areas' as any);
+    // Remove existing event listeners
+    if (map.current.getLayer('property-buildings')) {
+      map.current.off('click', 'property-buildings' as any);
+      map.current.off('mouseenter', 'property-buildings' as any);
+      map.current.off('mouseleave', 'property-buildings' as any);
+    }
+    if (map.current.getLayer('property-click-areas')) {
+      map.current.off('click', 'property-click-areas' as any);
+      map.current.off('mouseenter', 'property-click-areas' as any);
+      map.current.off('mouseleave', 'property-click-areas' as any);
+    }
 
     const handlePropertyClick = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.MapboxGeoJSONFeature[] }) => {
       if (!e.features || e.features.length === 0) return;
 
+      // Get building coordinates for bottom tab
+      let buildingCoordinates: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      
+      // If we clicked on a building, get its centroid
+      if (e.features[0].source === 'composite') {
+        const clickedFeature = e.features[0];
+        if (clickedFeature.geometry && clickedFeature.geometry.type === 'Polygon') {
+          const coordinates = (clickedFeature.geometry as any).coordinates[0];
+          if (coordinates && coordinates.length > 0) {
+            let centerLng = 0, centerLat = 0;
+            for (const coord of coordinates) {
+              centerLng += coord[0];
+              centerLat += coord[1];
+            }
+            centerLng /= coordinates.length;
+            centerLat /= coordinates.length;
+            buildingCoordinates = [centerLng, centerLat];
+          }
+        }
+      }
+
+      // Find all properties for this building using smart finder
+      const allBuildingProperties = findPropertiesForBuilding(e.features[0], buildingCoordinates);
+      
+      console.log('Property building clicked, found:', allBuildingProperties.length, 'properties');
+
+      // Update state for bottom tab
+      setSelectedBuildingCoords(buildingCoordinates);
+      setSelectedBuildingProperties(allBuildingProperties);
+      
+      // Notify parent component
+      if (onBuildingPropertiesChange) {
+        console.log('Sending to bottom tab:', allBuildingProperties.length, 'properties');
+        onBuildingPropertiesChange(allBuildingProperties, buildingCoordinates);
+      }
+
+      // Show popup for immediate feedback
       let propertyData: any;
       
-      // If clicked on building, find nearest property
+      // Find closest property for popup display
       if (e.features[0].source === 'composite') {
-        // Find the closest property to the click point
         const clickPoint = [e.lngLat.lng, e.lngLat.lat];
         let closestProperty = null;
         let minDistance = Infinity;
@@ -284,7 +397,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             <strong>Konum:</strong> ${propertyData.neighborhood}, ${propertyData.district}, ${propertyData.city}
           </p>
           <p style="margin: 0 0 5px 0; color: #888; font-size: 12px;">
-            <strong>Koordinatlar:</strong> ${propertyData.latitude}, ${propertyData.longitude}
+            <strong>Bu binada ${allBuildingProperties.length} ilan var</strong>
           </p>
           <p style="margin: 0; color: #666; font-size: 12px;">
             <strong>İlan No:</strong> ${propertyData.listing_number}
@@ -294,20 +407,17 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
       // Create and display popup
       new mapboxgl.Popup()
-        .setLngLat(e.lngLat)
+        .setLngLat(buildingCoordinates)
         .setHTML(popupContent)
         .addTo(map.current!);
+
+      // Also highlight the building
+      if (e.features[0].id) {
+        map.current!.setFilter('selected-building', ['==', ['id'], e.features[0].id]);
+        map.current!.setFilter('selected-building-light', ['==', ['id'], e.features[0].id]);
+      }
     };
 
-    map.current.on('click', 'property-buildings' as any, handlePropertyClick);
-    map.current.on('click', 'property-click-areas' as any, handlePropertyClick);
-
-    // Change cursor on hover
-    map.current.off('mouseenter', 'property-buildings' as any);
-    map.current.off('mouseleave', 'property-buildings' as any);
-    map.current.off('mouseenter', 'property-click-areas' as any);
-    map.current.off('mouseleave', 'property-click-areas' as any);
-    
     const handleMouseEnter = () => {
       if (map.current) {
         map.current.getCanvas().style.cursor = 'pointer';
@@ -320,6 +430,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
       }
     };
 
+    // Add event listeners
+    map.current.on('click', 'property-buildings' as any, handlePropertyClick);
+    map.current.on('click', 'property-click-areas' as any, handlePropertyClick);
     map.current.on('mouseenter', 'property-buildings' as any, handleMouseEnter);
     map.current.on('mouseleave', 'property-buildings' as any, handleMouseLeave);
     map.current.on('mouseenter', 'property-click-areas' as any, handleMouseEnter);
@@ -349,9 +462,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
       setZoom(parseFloat(map.current.getZoom().toFixed(2)));
     });
 
-    // Fetch properties when user finishes moving the map
+    // Fetch properties when user finishes moving the map (with debounce)
+    let moveTimeout: NodeJS.Timeout;
     map.current.on('moveend', () => {
-      fetchProperties();
+      clearTimeout(moveTimeout);
+      moveTimeout = setTimeout(() => {
+        fetchProperties();
+      }, 500); // 500ms debounce
     });
 
     map.current.on('style.load', () => {
@@ -406,11 +523,27 @@ const MapComponent: React.FC<MapComponentProps> = ({
               15, 0,
               15.05, ['get', 'min_height']
             ],
-            'fill-extrusion-opacity': 0.8
+            'fill-extrusion-opacity': 1.0
           }
         },
         labelLayerId
       );
+
+      // Add property buildings layer (blue colored buildings with properties)
+      // This will be updated later when properties are loaded
+      map.current.addLayer({
+        id: 'property-buildings',
+        type: 'fill-extrusion',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['in', ['id'], ['literal', []]], // Empty filter initially
+        paint: {
+          'fill-extrusion-color': '#1e90ff',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 1.0
+        }
+      }, labelLayerId);
 
       // Add selected building layer (highlighted building when clicked)
       map.current.addLayer({
@@ -420,10 +553,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
         'source-layer': 'building',
         filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
-          'fill-extrusion-color': '#120A8F',
+          'fill-extrusion-color': '#ff6b6b',
           'fill-extrusion-height': ['get', 'height'],
           'fill-extrusion-base': ['get', 'min_height'],
-          'fill-extrusion-opacity': 1.0 // Fully opaque
+          'fill-extrusion-opacity': 1.0
         }
       }, labelLayerId);
 
@@ -435,13 +568,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
         'source-layer': 'building',
         filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
-          'fill-extrusion-color': '#120A8F',
+          'fill-extrusion-color': '#ff6b6b',
           'fill-extrusion-height': [
             'interpolate',
             ['linear'],
             ['zoom'],
             15, 0,
-            15.05, ['+', ['get', 'height'], 500]  // Reduced height for more subtle effect
+            15.05, ['+', ['get', 'height'], 200]  // Subtle light effect
           ],
           'fill-extrusion-base': [
             'interpolate',
@@ -450,10 +583,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
             15, ['get', 'height'],
             15.05, ['get', 'height']
           ],
-          'fill-extrusion-opacity': 0.3 // More subtle light effect
+          'fill-extrusion-opacity': 0.4
         }
       }, labelLayerId);
 
+      // General building click handler for any building (not just property buildings)
       map.current.on('click', (e) => {
         if (!map.current) return;
 
@@ -489,55 +623,50 @@ const MapComponent: React.FC<MapComponentProps> = ({
         setSelectedBuildingCoords(buildingCoordinates);
         console.log('Tıklanan bina koordinatları:', buildingCoordinates);
 
-        // Check if this building has properties
-        const hasProperty = properties.some(prop => {
-          const distance = Math.sqrt(
-            Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
-            Math.pow(prop.latitude - buildingCoordinates[1], 2)
-          );
-          return distance < 0.0001; // Small threshold for coordinate matching
+        // Use smart property finder
+        console.log('Checking building at coordinates:', buildingCoordinates);
+        console.log('Total properties available:', properties.length);
+        
+        const buildingProperties = findPropertiesForBuilding(clickedFeature, buildingCoordinates);
+        const hasProperty = buildingProperties.length > 0;
+
+        console.log('Final result:', {
+          buildingCoordinates,
+          totalProperties: properties.length,
+          foundProperties: buildingProperties.length,
+          hasProperty,
+          properties: buildingProperties
         });
+
+        // Update selected building properties state
+        setSelectedBuildingProperties(buildingProperties);
+        
+        // Notify parent component about the change
+        if (onBuildingPropertiesChange) {
+          console.log('Notifying parent with:', buildingProperties.length, 'properties');
+          onBuildingPropertiesChange(buildingProperties, buildingCoordinates);
+        } else {
+          console.log('No onBuildingPropertiesChange callback provided');
+        }
 
         // Show popup with building info
         const popupContent = hasProperty 
-          ? (() => {
-              // Find closest property
-              let closestProperty = null;
-              let minDistance = Infinity;
-              for (const prop of properties) {
-                const distance = Math.sqrt(
-                  Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
-                  Math.pow(prop.latitude - buildingCoordinates[1], 2)
-                );
-                if (distance < minDistance) {
-                  minDistance = distance;
-                  closestProperty = prop;
-                }
-              }
-              
-              if (!closestProperty) return '';
-              
-              return `
-                <div style="font-family: Arial, sans-serif; min-width: 200px;">
-                  <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${closestProperty.property_type} - ${closestProperty.room_count}</h3>
-                  <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-                    <strong>Fiyat:</strong> ${new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(closestProperty.price)}
-                  </p>
-                  <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-                    <strong>Alan:</strong> ${closestProperty.gross_area}m² (Brüt) / ${closestProperty.net_area}m² (Net)
-                  </p>
-                  <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-                    <strong>Konum:</strong> ${closestProperty.neighborhood}, ${closestProperty.district}, ${closestProperty.city}
-                  </p>
-                  <p style="margin: 0 0 5px 0; color: #888; font-size: 12px;">
-                    <strong>Bina Koordinatları:</strong> ${buildingCoordinates[1].toFixed(6)}, ${buildingCoordinates[0].toFixed(6)}
-                  </p>
-                  <p style="margin: 0; color: #666; font-size: 12px;">
-                    <strong>İlan No:</strong> ${closestProperty.listing_number}
-                  </p>
+          ? `
+              <div style="font-family: Arial, sans-serif; min-width: 200px;">
+                <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">Bu Binada ${buildingProperties.length} İlan Var</h3>
+                <div style="margin: 0 0 10px 0;">
+                  ${buildingProperties.map(prop => `
+                    <div style="padding: 5px; border: 1px solid #eee; margin: 3px 0; border-radius: 3px;">
+                      <strong>${prop.property_type} - ${prop.room_count}</strong><br>
+                      <span style="color: #666;">${new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(prop.price)}</span>
+                    </div>
+                  `).join('')}
                 </div>
-              `;
-            })()
+                <p style="margin: 0; color: #888; font-size: 12px;">
+                  <strong>Bina Koordinatları:</strong> ${buildingCoordinates[1].toFixed(6)}, ${buildingCoordinates[0].toFixed(6)}
+                </p>
+              </div>
+            `
           : `
               <div style="font-family: Arial, sans-serif; min-width: 200px;">
                 <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">Bina Bilgisi</h3>
@@ -556,14 +685,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
           .addTo(map.current!);
 
         // Handle selected building highlighting
-        const style = map.current.getStyle();
-        if (!style.layers.find(layer => layer.id === 'selected-building')) {
-          // This should not happen since we create the layer on style.load
-          console.warn('Selected building layer not found');
-        } else {
-          map.current.setFilter('selected-building', ['==', ['id'], featureId]);
-          map.current.setFilter('selected-building-light', ['==', ['id'], featureId]);
-        }
+        map.current.setFilter('selected-building', ['==', ['id'], featureId]);
+        map.current.setFilter('selected-building-light', ['==', ['id'], featureId]);
       });
 
       map.current.setLight({
@@ -573,8 +696,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
         position: [1.5, 180, 60]
       });
 
-      // Fetch properties when map is ready
-      fetchProperties();
+      // Fetch properties when map is ready - only once!
+      let hasInitiallyFetched = false;
+      map.current.on('idle', () => {
+        if (!hasInitiallyFetched) {
+          hasInitiallyFetched = true;
+          fetchProperties();
+        }
+      });
     });
 
     return () => {
@@ -591,21 +720,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
       // Wait for map to be fully loaded and a short delay for rendering
       const colorBuildings = () => {
         if (map.current && map.current.isStyleLoaded()) {
-          // Add a small delay to ensure all buildings are rendered
-          setTimeout(() => {
-            colorPropertyBuildings();
-          }, 100);
+          colorPropertyBuildings();
         }
       };
 
-      if (map.current.isStyleLoaded()) {
-        colorBuildings();
-      } else {
-        map.current.on('style.load', colorBuildings);
-        map.current.on('idle', colorBuildings); // Also trigger when map is idle
-      }
+      // Add a small delay to ensure all buildings are rendered
+      const timeoutId = setTimeout(colorBuildings, 300);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [properties]);
+  }, [properties]); // Only re-run when properties change
 
   return (
     <div className={styles.mapContainer}>

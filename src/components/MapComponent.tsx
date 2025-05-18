@@ -63,13 +63,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
     return inside;
   };
 
-  // Smart property finder - used for both popup and bottom tab
+  // Smart property finder - used for both popup and bottom tab (with performance optimization)
   const findPropertiesForBuilding = (buildingFeature: any, buildingCoordinates: [number, number]): Property[] => {
     if (properties.length === 0) return [];
     
     let foundProperties: Property[] = [];
     
-    // Method 1: Find properties within building polygon if available
+    // Method 1: Find properties within building polygon if available (most accurate)
     if (buildingFeature.geometry && buildingFeature.geometry.type === 'Polygon') {
       const polygon = buildingFeature.geometry.coordinates[0];
       
@@ -78,42 +78,43 @@ const MapComponent: React.FC<MapComponentProps> = ({
         return isPointInPolygon(point, polygon);
       });
       
-      console.log(`Found ${foundProperties.length} properties inside building polygon`);
+      if (foundProperties.length > 0) {
+        console.log(`Found ${foundProperties.length} properties inside building polygon`);
+        return foundProperties; // Return early if found in polygon
+      }
     }
     
-    // Method 2: If no properties found in polygon, use distance-based approach
-    if (foundProperties.length === 0) {
-      console.log('No properties in polygon, trying distance-based approach...');
-      
-      foundProperties = properties.filter(prop => {
-        const distance = Math.sqrt(
+    // Method 2: Distance-based approach with optimized search radius
+    const searchRadius = 0.002; // Reduced from 0.005 for better performance
+    foundProperties = properties.filter(prop => {
+      const distance = Math.sqrt(
+        Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
+        Math.pow(prop.latitude - buildingCoordinates[1], 2)
+      );
+      return distance < searchRadius;
+    });
+    
+    if (foundProperties.length > 0) {
+      console.log(`Found ${foundProperties.length} properties within ${searchRadius * 111} km`);
+      return foundProperties;
+    }
+    
+    // Method 3: Find closest properties (limited to 3 for performance)
+    console.log('No properties in range, finding closest 3 properties...');
+    
+    const sortedProperties = properties
+      .map(prop => ({
+        property: prop,
+        distance: Math.sqrt(
           Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
           Math.pow(prop.latitude - buildingCoordinates[1], 2)
-        );
-        return distance < 0.005; // 500 meter radius
-      });
+        )
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 3); // Limit to 3 for performance
       
-      console.log(`Found ${foundProperties.length} properties within distance`);
-    }
-    
-    // Method 3: If still no properties, find closest ones
-    if (foundProperties.length === 0) {
-      console.log('No properties in range, finding closest 3 properties...');
-      
-      const sortedProperties = properties
-        .map(prop => ({
-          property: prop,
-          distance: Math.sqrt(
-            Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
-            Math.pow(prop.latitude - buildingCoordinates[1], 2)
-          )
-        }))
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, 3);
-        
-      foundProperties = sortedProperties.map(item => item.property);
-      console.log(`Selected closest 3 properties`);
-    }
+    foundProperties = sortedProperties.map(item => item.property);
+    console.log(`Selected closest 3 properties`);
     
     return foundProperties;
   };
@@ -353,65 +354,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         onBuildingPropertiesChange(allBuildingProperties, buildingCoordinates);
       }
 
-      // Show popup for immediate feedback
-      let propertyData: any;
-      
-      // Find closest property for popup display
-      if (e.features[0].source === 'composite') {
-        const clickPoint = [e.lngLat.lng, e.lngLat.lat];
-        let closestProperty = null;
-        let minDistance = Infinity;
-
-        for (const prop of properties) {
-          const distance = Math.sqrt(
-            Math.pow(prop.longitude - clickPoint[0], 2) + 
-            Math.pow(prop.latitude - clickPoint[1], 2)
-          );
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestProperty = prop;
-          }
-        }
-
-        if (closestProperty) {
-          propertyData = closestProperty;
-        }
-      } else {
-        // Clicked on invisible point
-        propertyData = e.features[0].properties;
-      }
-
-      if (!propertyData) return;
-
-      // Create popup content
-      const popupContent = `
-        <div style="font-family: Arial, sans-serif; min-width: 200px;">
-          <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${propertyData.property_type} - ${propertyData.room_count}</h3>
-          <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-            <strong>Fiyat:</strong> ${new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(propertyData.price)}
-          </p>
-          <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-            <strong>Alan:</strong> ${propertyData.gross_area}m² (Brüt) / ${propertyData.net_area}m² (Net)
-          </p>
-          <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-            <strong>Konum:</strong> ${propertyData.neighborhood}, ${propertyData.district}, ${propertyData.city}
-          </p>
-          <p style="margin: 0 0 5px 0; color: #888; font-size: 12px;">
-            <strong>Bu binada ${allBuildingProperties.length} ilan var</strong>
-          </p>
-          <p style="margin: 0; color: #666; font-size: 12px;">
-            <strong>İlan No:</strong> ${propertyData.listing_number}
-          </p>
-        </div>
-      `;
-
-      // Create and display popup
-      new mapboxgl.Popup()
-        .setLngLat(buildingCoordinates)
-        .setHTML(popupContent)
-        .addTo(map.current!);
-
-      // Also highlight the building
+      // Highlight the building
       if (e.features[0].id) {
         map.current!.setFilter('selected-building', ['==', ['id'], e.features[0].id]);
         map.current!.setFilter('selected-building-light', ['==', ['id'], e.features[0].id]);
@@ -468,7 +411,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       clearTimeout(moveTimeout);
       moveTimeout = setTimeout(() => {
         fetchProperties();
-      }, 500); // 500ms debounce
+      }, 800); // Increased debounce to 800ms
     });
 
     map.current.on('style.load', () => {
@@ -624,19 +567,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
         console.log('Tıklanan bina koordinatları:', buildingCoordinates);
 
         // Use smart property finder
-        console.log('Checking building at coordinates:', buildingCoordinates);
-        console.log('Total properties available:', properties.length);
-        
         const buildingProperties = findPropertiesForBuilding(clickedFeature, buildingCoordinates);
-        const hasProperty = buildingProperties.length > 0;
 
-        console.log('Final result:', {
-          buildingCoordinates,
-          totalProperties: properties.length,
-          foundProperties: buildingProperties.length,
-          hasProperty,
-          properties: buildingProperties
-        });
+        console.log('Building clicked - found:', buildingProperties.length, 'properties');
 
         // Update selected building properties state
         setSelectedBuildingProperties(buildingProperties);
@@ -645,44 +578,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         if (onBuildingPropertiesChange) {
           console.log('Notifying parent with:', buildingProperties.length, 'properties');
           onBuildingPropertiesChange(buildingProperties, buildingCoordinates);
-        } else {
-          console.log('No onBuildingPropertiesChange callback provided');
         }
-
-        // Show popup with building info
-        const popupContent = hasProperty 
-          ? `
-              <div style="font-family: Arial, sans-serif; min-width: 200px;">
-                <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">Bu Binada ${buildingProperties.length} İlan Var</h3>
-                <div style="margin: 0 0 10px 0;">
-                  ${buildingProperties.map(prop => `
-                    <div style="padding: 5px; border: 1px solid #eee; margin: 3px 0; border-radius: 3px;">
-                      <strong>${prop.property_type} - ${prop.room_count}</strong><br>
-                      <span style="color: #666;">${new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(prop.price)}</span>
-                    </div>
-                  `).join('')}
-                </div>
-                <p style="margin: 0; color: #888; font-size: 12px;">
-                  <strong>Bina Koordinatları:</strong> ${buildingCoordinates[1].toFixed(6)}, ${buildingCoordinates[0].toFixed(6)}
-                </p>
-              </div>
-            `
-          : `
-              <div style="font-family: Arial, sans-serif; min-width: 200px;">
-                <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">Bina Bilgisi</h3>
-                <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
-                  <strong>Durum:</strong> Bu binada ilan bulunmuyor
-                </p>
-                <p style="margin: 0; color: #888; font-size: 12px;">
-                  <strong>Bina Koordinatları:</strong> ${buildingCoordinates[1].toFixed(6)}, ${buildingCoordinates[0].toFixed(6)}
-                </p>
-              </div>
-            `;
-
-        new mapboxgl.Popup()
-          .setLngLat(buildingCoordinates)
-          .setHTML(popupContent)
-          .addTo(map.current!);
 
         // Handle selected building highlighting
         map.current.setFilter('selected-building', ['==', ['id'], featureId]);
@@ -717,19 +613,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
   // Color buildings when properties are loaded
   useEffect(() => {
     if (map.current && properties.length > 0) {
-      // Wait for map to be fully loaded and a short delay for rendering
-      const colorBuildings = () => {
+      // Debounce building coloring to prevent excessive calls
+      const timeoutId = setTimeout(() => {
         if (map.current && map.current.isStyleLoaded()) {
           colorPropertyBuildings();
         }
-      };
-
-      // Add a small delay to ensure all buildings are rendered
-      const timeoutId = setTimeout(colorBuildings, 300);
+      }, 500); // Increased delay
       
       return () => clearTimeout(timeoutId);
     }
-  }, [properties]); // Only re-run when properties change
+  }, [properties]);
 
   return (
     <div className={styles.mapContainer}>

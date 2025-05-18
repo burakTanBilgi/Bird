@@ -41,6 +41,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [zoom, setZoom] = useState<number>(initialZoom);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [selectedBuildingCoords, setSelectedBuildingCoords] = useState<[number, number] | null>(null);
 
   // Fetch properties from API based on current viewport
   const fetchProperties = async () => {
@@ -94,17 +95,53 @@ const MapComponent: React.FC<MapComponentProps> = ({
       // Convert lat/lng to pixel coordinates
       const point = map.current!.project([property.longitude, property.latitude]);
       
-      // Query for building features at this point
-      const features = map.current!.queryRenderedFeatures(point, {
+      // Query for building features with increased buffer for better accuracy
+      const buffer = 10; // Increased from 5 to 10 pixels
+      const features = map.current!.queryRenderedFeatures([
+        [point.x - buffer, point.y - buffer],
+        [point.x + buffer, point.y + buffer]
+      ], {
         layers: ['3d-buildings']
       });
 
       if (features && features.length > 0) {
-        features.forEach(feature => {
-          if (feature.id && !buildingIds.includes(feature.id)) {
-            buildingIds.push(feature.id);
+        // Find the closest building to the exact coordinate
+        let closestFeature: any = null;
+        let minDistance = Infinity;
+
+        features.forEach((feature: any) => {
+          if (feature.geometry && feature.geometry.type === 'Polygon') {
+            // Calculate distance from property coordinate to building centroid
+            const coords = feature.geometry.coordinates[0];
+            if (coords && coords.length > 0) {
+              let centerLng = 0, centerLat = 0;
+              for (const coord of coords) {
+                centerLng += coord[0];
+                centerLat += coord[1];
+              }
+              centerLng /= coords.length;
+              centerLat /= coords.length;
+
+              const distance = Math.sqrt(
+                Math.pow(property.longitude - centerLng, 2) + 
+                Math.pow(property.latitude - centerLat, 2)
+              );
+
+              if (distance < minDistance && distance < 0.001) { // Added max distance threshold
+                minDistance = distance;
+                closestFeature = feature;
+              }
+            }
           }
         });
+
+        // Only add if we found a close enough building and haven't added it before
+        if (closestFeature && closestFeature.id != null && !buildingIds.includes(closestFeature.id)) {
+          buildingIds.push(closestFeature.id);
+          console.log(`Matched property ${property.id} to building ${closestFeature.id}, distance: ${minDistance.toFixed(6)}`);
+        } else if (!closestFeature) {
+          console.log(`No building found for property ${property.id} at ${property.latitude}, ${property.longitude}`);
+        }
       }
     });
 
@@ -124,6 +161,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
     // Add or update property buildings layer
     if (!map.current.getLayer('property-buildings')) {
+      // Add property buildings layer before the selected building layers
+      const labelLayerId = map.current.getStyle().layers?.find(
+        (layer) => layer.type === 'symbol' && layer.layout && (layer.layout as any)['text-field']
+      )?.id;
+
       map.current.addLayer({
         id: 'property-buildings',
         type: 'fill-extrusion',
@@ -134,9 +176,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
           'fill-extrusion-color': '#1e90ff', // Blue color for buildings with properties
           'fill-extrusion-height': ['get', 'height'],
           'fill-extrusion-base': ['get', 'min_height'],
-          'fill-extrusion-opacity': 0.8
+          'fill-extrusion-opacity': 1.0 // Fully opaque
         }
-      });
+      }, 'selected-building-light'); // Add before the light layer
     } else {
       // Update filter for existing layer
       map.current.setFilter('property-buildings', ['in', ['id'], ['literal', buildingIds]]);
@@ -241,6 +283,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
           <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
             <strong>Konum:</strong> ${propertyData.neighborhood}, ${propertyData.district}, ${propertyData.city}
           </p>
+          <p style="margin: 0 0 5px 0; color: #888; font-size: 12px;">
+            <strong>Koordinatlar:</strong> ${propertyData.latitude}, ${propertyData.longitude}
+          </p>
           <p style="margin: 0; color: #666; font-size: 12px;">
             <strong>İlan No:</strong> ${propertyData.listing_number}
           </p>
@@ -327,6 +372,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         'star-intensity': 0.6
       });
 
+      // Add base 3D buildings layer
       map.current.addLayer(
         {
           id: '3d-buildings',
@@ -366,12 +412,28 @@ const MapComponent: React.FC<MapComponentProps> = ({
         labelLayerId
       );
 
+      // Add selected building layer (highlighted building when clicked)
+      map.current.addLayer({
+        id: 'selected-building',
+        type: 'fill-extrusion',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['==', ['id'], ''], // Empty filter initially
+        paint: {
+          'fill-extrusion-color': '#120A8F',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 1.0 // Fully opaque
+        }
+      }, labelLayerId);
+
+      // Add selected building light effect layer
       map.current.addLayer({
         id: 'selected-building-light',
         type: 'fill-extrusion',
         source: 'composite',
         'source-layer': 'building',
-        filter: ['==', ['id'], ''], // boş başlangıç
+        filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
           'fill-extrusion-color': '#120A8F',
           'fill-extrusion-height': [
@@ -379,7 +441,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             ['linear'],
             ['zoom'],
             15, 0,
-            15.05, ['+', ['get', 'height'], 500000]  // Çok yüksek ışık konisi gibi
+            15.05, ['+', ['get', 'height'], 500]  // Reduced height for more subtle effect
           ],
           'fill-extrusion-base': [
             'interpolate',
@@ -388,9 +450,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
             15, ['get', 'height'],
             15.05, ['get', 'height']
           ],
-          'fill-extrusion-opacity': 0.35
+          'fill-extrusion-opacity': 0.3 // More subtle light effect
         }
-      });
+      }, labelLayerId);
 
       map.current.on('click', (e) => {
         if (!map.current) return;
@@ -405,27 +467,103 @@ const MapComponent: React.FC<MapComponentProps> = ({
         const featureId = clickedFeature.id;
         if (!featureId) return;
 
-        // Eğer seçili bina katmanı yoksa eklemeyi deneyelim
-        const style = map.current.getStyle();
-        if (!style.layers.find(layer => layer.id === 'selected-building')) {
-          map.current.addLayer({
-            id: 'selected-building',
-            type: 'fill-extrusion',
-            source: 'composite',
-            'source-layer': 'building',
-            filter: ['==', ['id'], featureId], // seçili bina
-            paint: {
-              'fill-extrusion-color': '#120A8F',
-              'fill-extrusion-height': ['get', 'height'],
-              'fill-extrusion-base': ['get', 'min_height'],
-              'fill-extrusion-opacity': 0.6
+        // Get building coordinates
+        let buildingCoordinates: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        
+        // If building has geometry, calculate centroid
+        if (clickedFeature.geometry && clickedFeature.geometry.type === 'Polygon') {
+          const coordinates = (clickedFeature.geometry as any).coordinates[0];
+          if (coordinates && coordinates.length > 0) {
+            let centerLng = 0, centerLat = 0;
+            for (const coord of coordinates) {
+              centerLng += coord[0];
+              centerLat += coord[1];
             }
-          });
-        } else {
-          map.current.setFilter('selected-building', ['==', ['id'], featureId]);
+            centerLng /= coordinates.length;
+            centerLat /= coordinates.length;
+            buildingCoordinates = [centerLng, centerLat];
+          }
         }
 
-        map.current.setFilter('selected-building-light', ['==', ['id'], featureId]);
+        // Update state with building coordinates
+        setSelectedBuildingCoords(buildingCoordinates);
+        console.log('Tıklanan bina koordinatları:', buildingCoordinates);
+
+        // Check if this building has properties
+        const hasProperty = properties.some(prop => {
+          const distance = Math.sqrt(
+            Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
+            Math.pow(prop.latitude - buildingCoordinates[1], 2)
+          );
+          return distance < 0.0001; // Small threshold for coordinate matching
+        });
+
+        // Show popup with building info
+        const popupContent = hasProperty 
+          ? (() => {
+              // Find closest property
+              let closestProperty = null;
+              let minDistance = Infinity;
+              for (const prop of properties) {
+                const distance = Math.sqrt(
+                  Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
+                  Math.pow(prop.latitude - buildingCoordinates[1], 2)
+                );
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  closestProperty = prop;
+                }
+              }
+              
+              if (!closestProperty) return '';
+              
+              return `
+                <div style="font-family: Arial, sans-serif; min-width: 200px;">
+                  <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${closestProperty.property_type} - ${closestProperty.room_count}</h3>
+                  <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
+                    <strong>Fiyat:</strong> ${new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(closestProperty.price)}
+                  </p>
+                  <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
+                    <strong>Alan:</strong> ${closestProperty.gross_area}m² (Brüt) / ${closestProperty.net_area}m² (Net)
+                  </p>
+                  <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
+                    <strong>Konum:</strong> ${closestProperty.neighborhood}, ${closestProperty.district}, ${closestProperty.city}
+                  </p>
+                  <p style="margin: 0 0 5px 0; color: #888; font-size: 12px;">
+                    <strong>Bina Koordinatları:</strong> ${buildingCoordinates[1].toFixed(6)}, ${buildingCoordinates[0].toFixed(6)}
+                  </p>
+                  <p style="margin: 0; color: #666; font-size: 12px;">
+                    <strong>İlan No:</strong> ${closestProperty.listing_number}
+                  </p>
+                </div>
+              `;
+            })()
+          : `
+              <div style="font-family: Arial, sans-serif; min-width: 200px;">
+                <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">Bina Bilgisi</h3>
+                <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">
+                  <strong>Durum:</strong> Bu binada ilan bulunmuyor
+                </p>
+                <p style="margin: 0; color: #888; font-size: 12px;">
+                  <strong>Bina Koordinatları:</strong> ${buildingCoordinates[1].toFixed(6)}, ${buildingCoordinates[0].toFixed(6)}
+                </p>
+              </div>
+            `;
+
+        new mapboxgl.Popup()
+          .setLngLat(buildingCoordinates)
+          .setHTML(popupContent)
+          .addTo(map.current!);
+
+        // Handle selected building highlighting
+        const style = map.current.getStyle();
+        if (!style.layers.find(layer => layer.id === 'selected-building')) {
+          // This should not happen since we create the layer on style.load
+          console.warn('Selected building layer not found');
+        } else {
+          map.current.setFilter('selected-building', ['==', ['id'], featureId]);
+          map.current.setFilter('selected-building-light', ['==', ['id'], featureId]);
+        }
       });
 
       map.current.setLight({
@@ -450,11 +588,21 @@ const MapComponent: React.FC<MapComponentProps> = ({
   // Color buildings when properties are loaded
   useEffect(() => {
     if (map.current && properties.length > 0) {
-      // Wait for map to be fully loaded
+      // Wait for map to be fully loaded and a short delay for rendering
+      const colorBuildings = () => {
+        if (map.current && map.current.isStyleLoaded()) {
+          // Add a small delay to ensure all buildings are rendered
+          setTimeout(() => {
+            colorPropertyBuildings();
+          }, 100);
+        }
+      };
+
       if (map.current.isStyleLoaded()) {
-        colorPropertyBuildings();
+        colorBuildings();
       } else {
-        map.current.on('style.load', colorPropertyBuildings);
+        map.current.on('style.load', colorBuildings);
+        map.current.on('idle', colorBuildings); // Also trigger when map is idle
       }
     }
   }, [properties]);
@@ -467,6 +615,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
         {properties.length > 0 && (
           <div style={{ marginTop: '8px', color: '#4caf50' }}>
             {properties.length} ilan gösteriliyor
+          </div>
+        )}
+        {selectedBuildingCoords && (
+          <div style={{ marginTop: '8px', color: '#2196f3', fontWeight: 'bold' }}>
+            Seçilen Bina: {selectedBuildingCoords[1].toFixed(6)}, {selectedBuildingCoords[0].toFixed(6)}
           </div>
         )}
       </div>

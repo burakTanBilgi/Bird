@@ -29,8 +29,6 @@ interface MapComponentProps {
   onBuildingPropertiesChange?: (properties: Property[], buildingCoordinates?: [number, number] | null) => void;
 }
 
-let mapInstance: mapboxgl.Map | null = null;
-
 const MapComponent: React.FC<MapComponentProps> = ({
   initialLng = 32.8552,
   initialLat = 39.8472,
@@ -39,18 +37,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
   onBuildingPropertiesChange
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const onBuildingPropertiesChangeRef = useRef(onBuildingPropertiesChange);
+  const map = useRef<mapboxgl.Map | null>(null);
   const [lng, setLng] = useState<number>(initialLng);
   const [lat, setLat] = useState<number>(initialLat);
   const [zoom, setZoom] = useState<number>(initialZoom);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedBuildingCoords, setSelectedBuildingCoords] = useState<[number, number] | null>(null);
-
-  // Update ref when callback changes
-  useEffect(() => {
-    onBuildingPropertiesChangeRef.current = onBuildingPropertiesChange;
-  }, [onBuildingPropertiesChange]);
+  const [selectedBuildingProperties, setSelectedBuildingProperties] = useState<Property[]>([]);
 
   // Helper function to check if a point is inside a polygon
   const isPointInPolygon = useCallback((point: [number, number], polygon: [number, number][]): boolean => {
@@ -69,13 +63,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
     return inside;
   }, []);
 
-  // Smart property finder
+  // Smart property finder - used for both popup and bottom tab (with performance optimization)
   const findPropertiesForBuilding = useCallback((buildingFeature: any, buildingCoordinates: [number, number]): Property[] => {
     if (properties.length === 0) return [];
     
     let foundProperties: Property[] = [];
     
-    // Method 1: Find properties within building polygon if available
+    // Method 1: Find properties within building polygon if available (most accurate)
     if (buildingFeature.geometry && buildingFeature.geometry.type === 'Polygon') {
       const polygon = buildingFeature.geometry.coordinates[0];
       
@@ -85,12 +79,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
       });
       
       if (foundProperties.length > 0) {
-        return foundProperties;
+        console.log(`Found ${foundProperties.length} properties inside building polygon`);
+        return foundProperties; // Return early if found in polygon
       }
     }
     
-    // Method 2: Distance-based approach
-    const searchRadius = 0.002;
+    // Method 2: Distance-based approach with optimized search radius
+    const searchRadius = 0.002; // Reduced from 0.005 for better performance
     foundProperties = properties.filter(prop => {
       const distance = Math.sqrt(
         Math.pow(prop.longitude - buildingCoordinates[0], 2) + 
@@ -100,10 +95,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
     
     if (foundProperties.length > 0) {
+      console.log(`Found ${foundProperties.length} properties within ${searchRadius * 111} km`);
       return foundProperties;
     }
     
-    // Method 3: Find closest properties (limited to 3)
+    // Method 3: Find closest properties (limited to 3 for performance)
+    console.log('No properties in range, finding closest 3 properties...');
+    
     const sortedProperties = properties
       .map(prop => ({
         property: prop,
@@ -113,19 +111,24 @@ const MapComponent: React.FC<MapComponentProps> = ({
         )
       }))
       .sort((a, b) => a.distance - b.distance)
-      .slice(0, 3);
+      .slice(0, 3); // Limit to 3 for performance
       
-    return sortedProperties.map(item => item.property);
+    foundProperties = sortedProperties.map(item => item.property);
+    console.log(`Selected closest 3 properties`);
+    
+    return foundProperties;
   }, [properties, isPointInPolygon]);
 
   // Fetch properties from API based on current viewport
-  const fetchProperties = useCallback(async () => {
-    if (!mapInstance || loading) return;
+  const fetchProperties = async () => {
+    if (!map.current || loading) return; // Prevent multiple simultaneous requests
     
     setLoading(true);
     try {
-      const bounds = mapInstance.getBounds();
+      // Get current viewport bounds
+      const bounds = map.current.getBounds();
       if (!bounds) {
+        console.log('Bounds not available, skipping fetch');
         setLoading(false);
         return;
       }
@@ -135,11 +138,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
         south: bounds.getSouth().toString(),
         east: bounds.getEast().toString(),
         west: bounds.getWest().toString(),
-        city: 'Ankara',
-        district: 'Çankaya',
-        neighborhood: 'Oran'
+        // You can add specific location filters too
+        city: 'Ankara',  // Only Ankara for now
+        district: 'Çankaya',  // Only Çankaya for now
+        neighborhood: 'Oran'  // Only Oran for now
       });
 
+      console.log('Fetching properties for viewport:', bounds);
       const response = await fetch(`/api/properties?${params}`);
       
       if (!response.ok) {
@@ -147,25 +152,32 @@ const MapComponent: React.FC<MapComponentProps> = ({
       }
       
       const data = await response.json();
-      setProperties(data);
+      console.log('Properties fetched successfully:', data.length, 'items');
+      
+      // Only update if data is different
+      if (JSON.stringify(data) !== JSON.stringify(properties)) {
+        setProperties(data);
+      }
     } catch (error) {
       console.error('Error fetching properties:', error);
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  };
 
   // Find building features at property coordinates
   const findBuildingsAtProperties = useCallback(() => {
-    if (!mapInstance || properties.length === 0) return [];
+    if (!map.current || properties.length === 0) return [];
 
     const buildingIds: (string | number)[] = [];
 
     properties.forEach(property => {
-      const point = mapInstance!.project([property.longitude, property.latitude]);
+      // Convert lat/lng to pixel coordinates
+      const point = map.current!.project([property.longitude, property.latitude]);
       
-      const buffer = 10;
-      const features = mapInstance!.queryRenderedFeatures([
+      // Query for building features with increased buffer for better accuracy
+      const buffer = 10; // Increased from 5 to 10 pixels
+      const features = map.current!.queryRenderedFeatures([
         [point.x - buffer, point.y - buffer],
         [point.x + buffer, point.y + buffer]
       ], {
@@ -173,11 +185,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
       });
 
       if (features && features.length > 0) {
+        // Find the closest building to the exact coordinate
         let closestFeature: any = null;
         let minDistance = Infinity;
 
         features.forEach((feature: any) => {
           if (feature.geometry && feature.geometry.type === 'Polygon') {
+            // Calculate distance from property coordinate to building centroid
             const coords = feature.geometry.coordinates[0];
             if (coords && coords.length > 0) {
               let centerLng = 0, centerLat = 0;
@@ -193,7 +207,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
                 Math.pow(property.latitude - centerLat, 2)
               );
 
-              if (distance < minDistance && distance < 0.001) {
+              if (distance < minDistance && distance < 0.001) { // Added max distance threshold
                 minDistance = distance;
                 closestFeature = feature;
               }
@@ -201,8 +215,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
           }
         });
 
+        // Only add if we found a close enough building and haven't added it before
         if (closestFeature && closestFeature.id != null && !buildingIds.includes(closestFeature.id)) {
           buildingIds.push(closestFeature.id);
+          console.log(`Matched property ${property.id} to building ${closestFeature.id}, distance: ${minDistance.toFixed(6)}`);
+        } else if (!closestFeature) {
+          console.log(`No building found for property ${property.id} at ${property.latitude}, ${property.longitude}`);
         }
       }
     });
@@ -211,28 +229,32 @@ const MapComponent: React.FC<MapComponentProps> = ({
   }, [properties]);
 
   // Color buildings that contain properties
-  const colorPropertyBuildings = useCallback(() => {
-    if (!mapInstance || properties.length === 0) return;
+  const colorPropertyBuildings = () => {
+    if (!map.current || properties.length === 0) return;
 
-    if (!mapInstance.getLayer('3d-buildings')) {
+    // Make sure the 3d-buildings layer is loaded
+    if (!map.current.getLayer('3d-buildings')) {
+      console.log('3d-buildings layer not yet loaded, waiting...');
       return;
     }
 
     const buildingIds = findBuildingsAtProperties();
 
     if (buildingIds.length === 0) {
-      if (mapInstance.getLayer('property-buildings')) {
-        mapInstance.setFilter('property-buildings', ['in', ['id'], ['literal', []]] as mapboxgl.ExpressionSpecification);
+      console.log('No buildings found at property coordinates');
+      // Clear the filter to show no buildings
+      if (map.current.getLayer('property-buildings')) {
+        map.current.setFilter('property-buildings', ['in', ['id'], ['literal', []]]);
       }
       return;
     }
 
-    // Update filter for property buildings layer
-    if (mapInstance.getLayer('property-buildings')) {
-      mapInstance.setFilter('property-buildings', ['in', ['id'], ['literal', buildingIds]] as mapboxgl.ExpressionSpecification);
+    // Update filter for property buildings layer (it already exists now)
+    if (map.current.getLayer('property-buildings')) {
+      map.current.setFilter('property-buildings', ['in', ['id'], ['literal', buildingIds]]);
     }
 
-    // Add invisible points for click handling
+    // Add invisible points for click handling (since buildings might not be clickable in all zoom levels)
     const geojsonData = {
       type: 'FeatureCollection' as const,
       features: properties.map(property => ({
@@ -257,141 +279,154 @@ const MapComponent: React.FC<MapComponentProps> = ({
       }))
     };
 
-    if (!mapInstance.getSource('property-points')) {
-      mapInstance.addSource('property-points', {
+    // Add invisible markers for click handling
+    if (!map.current.getSource('property-points')) {
+      map.current.addSource('property-points', {
         type: 'geojson',
         data: geojsonData
       });
     } else {
-      const source = mapInstance.getSource('property-points') as mapboxgl.GeoJSONSource;
+      const source = map.current.getSource('property-points') as mapboxgl.GeoJSONSource;
       source.setData(geojsonData);
     }
 
-    if (!mapInstance.getLayer('property-click-areas')) {
-      mapInstance.addLayer({
+    if (!map.current.getLayer('property-click-areas')) {
+      map.current.addLayer({
         id: 'property-click-areas',
         type: 'circle',
         source: 'property-points',
         paint: {
-          'circle-radius': 15,
-          'circle-opacity': 0,
+          'circle-radius': 15, // Larger click area
+          'circle-opacity': 0, // Invisible
           'circle-stroke-width': 0
         }
       });
     }
-  }, [properties, findBuildingsAtProperties]);
+
+    // Remove existing event listeners
+    if (map.current.getLayer('property-buildings')) {
+      map.current.off('click', 'property-buildings' as any);
+      map.current.off('mouseenter', 'property-buildings' as any);
+      map.current.off('mouseleave', 'property-buildings' as any);
+    }
+    if (map.current.getLayer('property-click-areas')) {
+      map.current.off('click', 'property-click-areas' as any);
+      map.current.off('mouseenter', 'property-click-areas' as any);
+      map.current.off('mouseleave', 'property-click-areas' as any);
+    }
+
+    const handlePropertyClick = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.MapboxGeoJSONFeature[] }) => {
+      if (!e.features || e.features.length === 0) return;
+
+      // Get building coordinates for bottom tab
+      let buildingCoordinates: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      
+      // If we clicked on a building, get its centroid
+      if (e.features[0].source === 'composite') {
+        const clickedFeature = e.features[0];
+        if (clickedFeature.geometry && clickedFeature.geometry.type === 'Polygon') {
+          const coordinates = (clickedFeature.geometry as any).coordinates[0];
+          if (coordinates && coordinates.length > 0) {
+            let centerLng = 0, centerLat = 0;
+            for (const coord of coordinates) {
+              centerLng += coord[0];
+              centerLat += coord[1];
+            }
+            centerLng /= coordinates.length;
+            centerLat /= coordinates.length;
+            buildingCoordinates = [centerLng, centerLat];
+          }
+        }
+      }
+
+      // Find all properties for this building using smart finder
+      const allBuildingProperties = findPropertiesForBuilding(e.features[0], buildingCoordinates);
+      
+      console.log('Property building clicked, found:', allBuildingProperties.length, 'properties');
+
+      // Update state for bottom tab
+      setSelectedBuildingCoords(buildingCoordinates);
+      setSelectedBuildingProperties(allBuildingProperties);
+      
+      // Notify parent component
+      if (onBuildingPropertiesChange) {
+        console.log('🔵 Sending to bottom tab:', allBuildingProperties.length, 'properties');
+        console.log('🔵 Property building clicked, full data:', allBuildingProperties);
+        console.log('🔵 Building coordinates for bottom tab:', buildingCoordinates);
+        onBuildingPropertiesChange(allBuildingProperties, buildingCoordinates);
+      }
+
+      // Highlight the building
+      if (e.features[0].id) {
+        map.current!.setFilter('selected-building', ['==', ['id'], e.features[0].id]);
+        map.current!.setFilter('selected-building-light', ['==', ['id'], e.features[0].id]);
+      }
+    };
+
+    const handleMouseEnter = () => {
+      if (map.current) {
+        map.current.getCanvas().style.cursor = 'pointer';
+      }
+    };
+
+    const handleMouseLeave = () => {
+      if (map.current) {
+        map.current.getCanvas().style.cursor = '';
+      }
+    };
+
+    // Add event listeners
+    map.current.on('click', 'property-buildings' as any, handlePropertyClick);
+    map.current.on('click', 'property-click-areas' as any, handlePropertyClick);
+    map.current.on('mouseenter', 'property-buildings' as any, handleMouseEnter);
+    map.current.on('mouseleave', 'property-buildings' as any, handleMouseLeave);
+    map.current.on('mouseenter', 'property-click-areas' as any, handleMouseEnter);
+    map.current.on('mouseleave', 'property-click-areas' as any, handleMouseLeave);
+
+    console.log('Property buildings colored:', buildingIds.length, 'buildings');
+  };
 
   useEffect(() => {
-    if (mapInstance || !mapContainer.current) return;
+    if (map.current || !mapContainer.current) return;
 
-    mapInstance = new mapboxgl.Map({
+    map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: {
-        version: 8,
-        sources: {
-          'composite': {
-            type: 'vector',
-            url: 'mapbox://mapbox.mapbox-streets-v8'
-          }
-        },
-        layers: [
-          {
-            id: 'background',
-            type: 'background',
-            paint: {
-              'background-color': '#f8f8f8'
-            }
-          },
-          {
-            id: 'water',
-            source: 'composite',
-            'source-layer': 'water',
-            type: 'fill',
-            paint: {
-              'fill-color': '#a8d8ea'
-            }
-          },
-          {
-            id: 'landuse',
-            source: 'composite',
-            'source-layer': 'landuse',
-            type: 'fill',
-            paint: {
-              'fill-color': '#e8e8e8'
-            }
-          },
-          {
-            id: 'roads-casing',
-            source: 'composite',
-            'source-layer': 'road',
-            type: 'line',
-            paint: {
-              'line-color': '#cfcdca',
-              'line-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                5, 0.5,
-                12, 5,
-                18, 12
-              ]
-            }
-          },
-          {
-            id: 'roads',
-            source: 'composite',
-            'source-layer': 'road',
-            type: 'line',
-            paint: {
-              'line-color': '#ffffff',
-              'line-width': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                5, 0.2,
-                12, 3,
-                18, 8
-              ]
-            }
-          }
-        ]
-        // No glyphs property = no font loading issues!
-      },
-      center: [initialLng, initialLat],
-      zoom: initialZoom,
+      style: 'mapbox://styles/mapbox/streets-v11',
+      center: [lng, lat],
+      zoom: zoom,
       antialias: true,
       projection: 'globe'
     });
 
-    mapInstance.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    mapInstance.on('move', () => {
-      if (!mapInstance) return;
-      setLng(parseFloat(mapInstance.getCenter().lng.toFixed(4)));
-      setLat(parseFloat(mapInstance.getCenter().lat.toFixed(4)));
-      setZoom(parseFloat(mapInstance.getZoom().toFixed(2)));
+    map.current.on('move', () => {
+      if (!map.current) return;
+      setLng(parseFloat(map.current.getCenter().lng.toFixed(4)));
+      setLat(parseFloat(map.current.getCenter().lat.toFixed(4)));
+      setZoom(parseFloat(map.current.getZoom().toFixed(2)));
     });
 
-    // Fetch properties when user finishes moving the map
+    // Fetch properties when user finishes moving the map (with debounce)
     let moveTimeout: NodeJS.Timeout;
-    mapInstance.on('moveend', () => {
+    map.current.on('moveend', () => {
       clearTimeout(moveTimeout);
       moveTimeout = setTimeout(() => {
         fetchProperties();
-      }, 800);
+      }, 800); // Increased debounce to 800ms
     });
 
-    mapInstance.on('style.load', () => {
-      if (!mapInstance || !show3DBuildings) return;
+    map.current.on('style.load', () => {
+      if (!map.current || !show3DBuildings) return;
 
-      const layers = mapInstance.getStyle().layers;
+      const layers = map.current.getStyle().layers;
       if (!layers) return;
 
       const labelLayerId = layers.find(
         (layer) => layer.type === 'symbol' && layer.layout && (layer.layout as any)['text-field']
       )?.id;
 
-      mapInstance.setFog({
+      map.current.setFog({
         color: 'rgb(186, 210, 235)',
         'high-color': 'rgb(36, 92, 223)',
         'horizon-blend': 0.02,
@@ -400,12 +435,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
       });
 
       // Add base 3D buildings layer
-      mapInstance.addLayer(
+      map.current.addLayer(
         {
           id: '3d-buildings',
           source: 'composite',
           'source-layer': 'building',
-          filter: ['==', 'extrude', 'true'] as mapboxgl.ExpressionSpecification,
+          filter: ['==', 'extrude', 'true'],
           type: 'fill-extrusion',
           minzoom: 15,
           paint: {
@@ -418,9 +453,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
               100, '#b8b8b8',
               200, '#a3a3a3',
               400, '#8f8f8f'
-            ] as mapboxgl.ExpressionSpecification,
-            'fill-extrusion-height': ['get', 'height'] as mapboxgl.ExpressionSpecification,
-            'fill-extrusion-base': ['get', 'min_height'] as mapboxgl.ExpressionSpecification,
+            ],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': ['get', 'min_height'],
             'fill-extrusion-opacity': 1.0
           }
         },
@@ -428,55 +463,55 @@ const MapComponent: React.FC<MapComponentProps> = ({
       );
 
       // Add property buildings layer (blue colored buildings with properties)
-      mapInstance.addLayer({
+      map.current.addLayer({
         id: 'property-buildings',
         type: 'fill-extrusion',
         source: 'composite',
         'source-layer': 'building',
-        filter: ['in', ['id'], ['literal', []]] as mapboxgl.ExpressionSpecification,
+        filter: ['in', ['id'], ['literal', []]], // Empty filter initially
         paint: {
           'fill-extrusion-color': '#1e90ff',
-          'fill-extrusion-height': ['get', 'height'] as mapboxgl.ExpressionSpecification,
-          'fill-extrusion-base': ['get', 'min_height'] as mapboxgl.ExpressionSpecification,
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
           'fill-extrusion-opacity': 1.0
         }
       }, labelLayerId);
 
       // Add selected building layer (highlighted building when clicked)
-      mapInstance.addLayer({
+      map.current.addLayer({
         id: 'selected-building',
         type: 'fill-extrusion',
         source: 'composite',
         'source-layer': 'building',
-        filter: ['==', ['id'], ''] as mapboxgl.ExpressionSpecification,
+        filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
           'fill-extrusion-color': '#ff6b6b',
-          'fill-extrusion-height': 50000,
-          'fill-extrusion-base': ['get', 'min_height'] as mapboxgl.ExpressionSpecification,
-          'fill-extrusion-opacity': 0.35
+          'fill-extrusion-height': 50000, // Fixed 50000 height
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 0.35 // 0.35 opacity as requested
         }
       }, labelLayerId);
 
       // Add selected building light effect layer
-      mapInstance.addLayer({
+      map.current.addLayer({
         id: 'selected-building-light',
         type: 'fill-extrusion',
         source: 'composite',
         'source-layer': 'building',
-        filter: ['==', ['id'], ''] as mapboxgl.ExpressionSpecification,
+        filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
           'fill-extrusion-color': '#ff6b6b',
-          'fill-extrusion-height': 50200,
-          'fill-extrusion-base': 50000,
+          'fill-extrusion-height': 50200, // Light effect slightly higher
+          'fill-extrusion-base': 50000, // Start from selected building top
           'fill-extrusion-opacity': 0.2
         }
       }, labelLayerId);
 
-      // General building click handler for any building
-      mapInstance.on('click', (e) => {
-        if (!mapInstance) return;
+      // General building click handler for any building (not just property buildings)
+      map.current.on('click', (e) => {
+        if (!map.current) return;
 
-        const features = mapInstance.queryRenderedFeatures(e.point, {
+        const features = map.current.queryRenderedFeatures(e.point, {
           layers: ['3d-buildings']
         });
 
@@ -506,23 +541,37 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
         // Update state with building coordinates
         setSelectedBuildingCoords(buildingCoordinates);
+        console.log('Tıklanan bina koordinatları:', buildingCoordinates);
 
         // Use smart property finder
         const buildingProperties = findPropertiesForBuilding(clickedFeature, buildingCoordinates);
 
+        console.log('Building clicked - found:', buildingProperties.length, 'properties');
+
+        // Update selected building properties state
+        setSelectedBuildingProperties(buildingProperties);
+        
         // Notify parent component about the change
-        if (onBuildingPropertiesChangeRef.current) {
-          onBuildingPropertiesChangeRef.current(buildingProperties, buildingCoordinates);
+        if (onBuildingPropertiesChange) {
+          console.log('Notifying parent with:', buildingProperties.length, 'properties');
+          onBuildingPropertiesChange(buildingProperties, buildingCoordinates);
         }
 
         // Handle selected building highlighting
-        mapInstance.setFilter('selected-building', ['==', ['id'], featureId] as mapboxgl.ExpressionSpecification);
-        mapInstance.setFilter('selected-building-light', ['==', ['id'], featureId] as mapboxgl.ExpressionSpecification);
+        map.current.setFilter('selected-building', ['==', ['id'], featureId]);
+        map.current.setFilter('selected-building-light', ['==', ['id'], featureId]);
       });
 
-      // Fetch properties when map is ready
+      map.current.setLight({
+        anchor: 'viewport',
+        color: '#ffffff',
+        intensity: 0.4,
+        position: [1.5, 180, 60]
+      });
+
+      // Fetch properties when map is ready - only once!
       let hasInitiallyFetched = false;
-      mapInstance.on('idle', () => {
+      map.current.on('idle', () => {
         if (!hasInitiallyFetched) {
           hasInitiallyFetched = true;
           fetchProperties();
@@ -531,25 +580,26 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
 
     return () => {
-      if (mapInstance) {
-        mapInstance.remove();
-        mapInstance = null;
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
       }
     };
-  }, []);  // Empty dependency array - only run once
+  }, []);
 
   // Color buildings when properties are loaded
   useEffect(() => {
-    if (mapInstance && properties.length > 0) {
+    if (map.current && properties.length > 0) {
+      // Debounce building coloring to prevent excessive calls
       const timeoutId = setTimeout(() => {
-        if (mapInstance && mapInstance.isStyleLoaded()) {
+        if (map.current && map.current.isStyleLoaded()) {
           colorPropertyBuildings();
         }
-      }, 500);
+      }, 500); // Increased delay
       
       return () => clearTimeout(timeoutId);
     }
-  }, [properties, colorPropertyBuildings]);
+  }, [properties]);
 
   return (
     <div className={styles.mapContainer}>

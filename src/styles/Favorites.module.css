@@ -1,154 +1,297 @@
+/* styles/Favorites.module.css - Updated to match BottomTab dark theme */
+.darkMain {
+  background-color: #1B1D22;
+  color: #FAF0CA;
+  min-height: calc(100vh - 60px);
+  width: 100%;
+}
+
+.title {
+  color: #FAF0CA;
+  margin: 2rem 0 1.5rem;
+  font-size: 2.2rem;
+  text-align: center;
+}
+
+.searchContainer {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto 1.5rem;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  padding-right: 2.5rem;
+  border-radius: 8px;
+  border: 2px solid #2A2D34;
+  background-color: #2A2D34;
+  color: #FAF0CA;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #7A9CC6;
+  box-shadow: 0 0 0 2px rgba(122, 156, 198, 0.3);
+}
+
+.searchInput::placeholder {
+  color: #8A8D94;
+}
+
+.clearButton {
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #7A9CC6;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+}
+
 .categoryFilter {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  margin: 1rem 0 2rem;
-  gap: 0.5rem;
+  gap: 0.8rem;
+  margin: 0 auto 2rem;
+  max-width: 900px;
+  padding: 0 1rem;
 }
 
 .categoryButton {
-  padding: 0.5rem 1rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 20px;
-  background: white;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid #2A2D34;
+  background-color: #2A2D34;
+  color: #FAF0CA;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 0.9rem;
   transition: all 0.2s ease;
 }
 
 .categoryButton:hover {
-  background: #f5f5f5;
+  background-color: #3A3D44;
+  transform: translateY(-2px);
 }
 
 .categoryButton.active {
-  background: #0070f3;
-  color: white;
-  border-color: #0070f3;
+  background-color: #7A9CC6;
+  color: #1B1D22;
+  border-color: #7A9CC6;
 }
 
 .favoritesGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.5rem;
   width: 100%;
   max-width: 1200px;
-  margin-bottom: 2rem;
+  margin: 0 auto 3rem;
+  padding: 0 1.5rem;
 }
 
 .favoriteCard {
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  padding: 1.5rem;
-  background: white;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  background-color: #2A2D34;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+  height: 450px; /* Fixed height for consistent cards */
 }
 
 .favoriteCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
 }
 
-.favoriteHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 0.75rem;
+/* Top part - Image Section */
+.favoriteImageSection {
+  position: relative;
+  height: 33.33%;
+  background-color: #1B1D22;
+  overflow: hidden;
 }
 
-.favoriteHeader h2 {
-  margin: 0;
-  font-size: 1.3rem;
-  color: #333;
+.favoriteImageContainer {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.favoriteImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .category {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  background: #f0f0f0;
-  border-radius: 4px;
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(27, 29, 34, 0.8);
+  color: #FAF0CA;
+  padding: 5px 10px;
+  border-radius: 6px;
   font-size: 0.8rem;
-  color: #666;
+  font-weight: 500;
 }
 
-.description {
-  margin: 0.5rem 0 1rem;
-  color: #555;
-  font-size: 0.95rem;
-  line-height: 1.4;
+/* Middle part - Content Section */
+.favoriteContent {
+  flex: 1;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 33.33%;
+}
+
+.favoriteName {
+  margin: 0 0 0.8rem 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #FAF0CA;
+}
+
+.favoriteDescription {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #E0E0E0;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  margin-bottom: 0.8rem;
 }
 
 .coordinates {
   display: flex;
-  gap: 1rem;
+  justify-content: space-between;
   font-family: monospace;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-  color: #666;
-  background: #f9f9f9;
+  font-size: 0.85rem;
+  background-color: rgba(122, 156, 198, 0.1);
   padding: 0.5rem;
   border-radius: 4px;
-}
-
-.favoriteFooter {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #eaeaea;
+  color: #7A9CC6;
+  margin-bottom: 0.5rem;
 }
 
 .dateAdded {
-  font-size: 0.85rem;
-  color: #888;
+  align-self: flex-end;
+  font-size: 0.8rem;
+  color: #8A8D94;
+  margin-top: auto;
 }
 
-.actions {
+/* Bottom part - Actions Section */
+.favoriteActions {
+  padding: 1rem;
   display: flex;
   justify-content: space-between;
-  margin-top: 0.5rem;
+  align-items: center;
+  gap: 0.8rem;
+  border-top: 1px solid rgba(250, 240, 202, 0.1);
+}
+
+.viewButton {
+  flex: 3;
+  background-color: #7A9CC6;
+  color: #1B1D22;
+  border: none;
+  padding: 0.8rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.viewButton:hover {
+  background-color: #98C1D9;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .visitedButton, .removeButton {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 1.2rem;
+  background-color: transparent;
 }
 
 .visitedButton {
-  background: white;
-  border: 1px solid #ccc;
-  color: #333;
+  border: 2px solid #7A9CC6;
+  color: #7A9CC6;
 }
 
 .visitedButton:hover {
-  background: #f5f5f5;
+  background-color: rgba(122, 156, 198, 0.1);
 }
 
 .visitedButton.visited {
-  background: #4caf50;
-  color: white;
-  border-color: #4caf50;
+  background-color: #7A9CC6;
+  color: #1B1D22;
+}
+
+.visitedButton.visited:hover {
+  background-color: #6389b3;
 }
 
 .removeButton {
-  background: white;
-  border: 1px solid #ff5252;
+  border: 2px solid #ff5252;
   color: #ff5252;
 }
 
 .removeButton:hover {
-  background: #ffebee;
+  background-color: rgba(255, 82, 82, 0.1);
 }
 
 .emptyState {
   grid-column: 1 / -1;
   text-align: center;
   padding: 3rem;
-  background: #f9f9f9;
+  background-color: #2A2D34;
   border-radius: 10px;
-  color: #666;
+  color: #8A8D94;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 250px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .favoritesGrid {
+    grid-template-columns: 1fr;
+    padding: 0 1rem;
+  }
+  
+  .favoriteCard {
+    height: 400px;
+  }
 }

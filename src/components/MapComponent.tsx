@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import styles from '../styles/MapComponent.module.css';
@@ -47,7 +47,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [selectedBuildingProperties, setSelectedBuildingProperties] = useState<Property[]>([]);
 
   // Helper function to check if a point is inside a polygon
-  const isPointInPolygon = (point: [number, number], polygon: [number, number][]): boolean => {
+  const isPointInPolygon = useCallback((point: [number, number], polygon: [number, number][]): boolean => {
     const [x, y] = point;
     let inside = false;
     
@@ -61,10 +61,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
     }
     
     return inside;
-  };
+  }, []);
 
   // Smart property finder - used for both popup and bottom tab (with performance optimization)
-  const findPropertiesForBuilding = (buildingFeature: any, buildingCoordinates: [number, number]): Property[] => {
+  const findPropertiesForBuilding = useCallback((buildingFeature: any, buildingCoordinates: [number, number]): Property[] => {
     if (properties.length === 0) return [];
     
     let foundProperties: Property[] = [];
@@ -117,7 +117,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     console.log(`Selected closest 3 properties`);
     
     return foundProperties;
-  };
+  }, [properties, isPointInPolygon]);
 
   // Fetch properties from API based on current viewport
   const fetchProperties = async () => {
@@ -166,7 +166,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   };
 
   // Find building features at property coordinates
-  const findBuildingsAtProperties = () => {
+  const findBuildingsAtProperties = useCallback(() => {
     if (!map.current || properties.length === 0) return [];
 
     const buildingIds: (string | number)[] = [];
@@ -226,7 +226,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
 
     return buildingIds;
-  };
+  }, [properties]);
 
   // Color buildings that contain properties
   const colorPropertyBuildings = () => {
@@ -350,7 +350,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
       
       // Notify parent component
       if (onBuildingPropertiesChange) {
-        console.log('Sending to bottom tab:', allBuildingProperties.length, 'properties');
+        console.log('🔵 Sending to bottom tab:', allBuildingProperties.length, 'properties');
+        console.log('🔵 Property building clicked, full data:', allBuildingProperties);
+        console.log('🔵 Building coordinates for bottom tab:', buildingCoordinates);
         onBuildingPropertiesChange(allBuildingProperties, buildingCoordinates);
       }
 
@@ -452,20 +454,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
               200, '#a3a3a3',
               400, '#8f8f8f'
             ],
-            'fill-extrusion-height': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              15, 0,
-              15.05, ['get', 'height']
-            ],
-            'fill-extrusion-base': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              15, 0,
-              15.05, ['get', 'min_height']
-            ],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': ['get', 'min_height'],
             'fill-extrusion-opacity': 1.0
           }
         },
@@ -473,7 +463,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
       );
 
       // Add property buildings layer (blue colored buildings with properties)
-      // This will be updated later when properties are loaded
       map.current.addLayer({
         id: 'property-buildings',
         type: 'fill-extrusion',
@@ -497,9 +486,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
         filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
           'fill-extrusion-color': '#ff6b6b',
-          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-height': 50000, // Fixed 50000 height
           'fill-extrusion-base': ['get', 'min_height'],
-          'fill-extrusion-opacity': 1.0
+          'fill-extrusion-opacity': 0.35 // 0.35 opacity as requested
         }
       }, labelLayerId);
 
@@ -512,21 +501,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
         filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
           'fill-extrusion-color': '#ff6b6b',
-          'fill-extrusion-height': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            15, 0,
-            15.05, ['+', ['get', 'height'], 200]  // Subtle light effect
-          ],
-          'fill-extrusion-base': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            15, ['get', 'height'],
-            15.05, ['get', 'height']
-          ],
-          'fill-extrusion-opacity': 0.4
+          'fill-extrusion-height': 50200, // Light effect slightly higher
+          'fill-extrusion-base': 50000, // Start from selected building top
+          'fill-extrusion-opacity': 0.2
         }
       }, labelLayerId);
 
@@ -608,7 +585,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         map.current = null;
       }
     };
-  }, [initialLng, initialLat, initialZoom, show3DBuildings]);
+  }, []);
 
   // Color buildings when properties are loaded
   useEffect(() => {

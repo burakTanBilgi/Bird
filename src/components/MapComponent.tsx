@@ -477,7 +477,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
       }, labelLayerId);
 
-      // Add selected building layer (highlighted building when clicked)
+      // Add selected building layer (highlighted building when clicked) - IMPROVED STYLING
       map.current.addLayer({
         id: 'selected-building',
         type: 'fill-extrusion',
@@ -485,14 +485,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
         'source-layer': 'building',
         filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
-          'fill-extrusion-color': '#ff6b6b',
-          'fill-extrusion-height': 50000, // Fixed 50000 height
+          'fill-extrusion-color': '#e74c3c', // Softer, more elegant red
+          'fill-extrusion-height': ['get', 'height'], // Keep original building height
           'fill-extrusion-base': ['get', 'min_height'],
-          'fill-extrusion-opacity': 0.35 // 0.35 opacity as requested
+          'fill-extrusion-opacity': 0.85 // Higher opacity for solid look
         }
       }, labelLayerId);
 
-      // Add selected building light effect layer
+      // Add selected building light effect layer - FIXED TO START FROM ROOF
       map.current.addLayer({
         id: 'selected-building-light',
         type: 'fill-extrusion',
@@ -500,10 +500,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
         'source-layer': 'building',
         filter: ['==', ['id'], ''], // Empty filter initially
         paint: {
-          'fill-extrusion-color': '#ff6b6b',
-          'fill-extrusion-height': 50200, // Light effect slightly higher
-          'fill-extrusion-base': 50000, // Start from selected building top
-          'fill-extrusion-opacity': 0.2
+          'fill-extrusion-color': '#c0392b', // Darker, more muted red for light effect
+          'fill-extrusion-height': 50000,
+          'fill-extrusion-base': ['get', 'height'], // Start from roof (original height)
+          'fill-extrusion-opacity': 0.35 // Low opacity for subtle light effect
         }
       }, labelLayerId);
 
